@@ -13,7 +13,7 @@ import com.example.user.dto.request.UserCreationRequest;
 import com.example.user.dto.request.UserUpdateRequest;
 import com.example.user.dto.response.UserResponse;
 import com.example.user.entity.User;
-import com.example.user.enums.Role;
+import com.example.user.enums.Roles;
 import com.example.user.exception.AppException;
 import com.example.user.exception.ErrorCode;
 import com.example.user.mapper.UserMapper;
@@ -46,19 +46,19 @@ public class UserService {
 
 
         HashSet<String> role = new HashSet<>();
-        role.add(Role.USER.name());
+        role.add(Roles.USER.name());
 
         //user.setRole(role);
         
         return userMapper.toUserResponse(userRepository.save(user));
 
     }
-
+    @PreAuthorize("hasRole('ADMIN')")
     public List<UserResponse> getUsers(){
         log.info("In method get User");
         return userRepository.findAll().stream().map(userMapper::toUserResponse).toList();
     }
-
+    @PostAuthorize("returnObject.username == authentication.name")
     public UserResponse getUser(String id){
         return userMapper.toUserResponse(userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found")));
