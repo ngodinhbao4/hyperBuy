@@ -1,0 +1,67 @@
+# Thuộc tính 'version' không còn cần thiết cho các phiên bản Docker Compose mới
+# version: '3.8' # Đã được comment hoặc xóa bỏ
+
+services:
+  # Định nghĩa service cho ứng dụng userservice của bạn
+  userservice:
+    # Build image từ Dockerfile trong thư mục hiện tại (.)
+    build:
+      context: ./user
+      dockerfile: Dockerfile # Tên Dockerfile của bạn
+    container_name: user-service-app # Đặt tên cho container (tùy chọn)
+    ports:
+      # Ánh xạ cổng 8080 của máy host tới cổng 8080 của container (nơi ứng dụng Spring Boot chạy)
+      - "8080:8080"
+    environment:
+      # Cấu hình kết nối cơ sở dữ liệu cho Spring Boot
+      # 'db' là tên của service MySQL được định nghĩa bên dưới.
+      # Các tham số ?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC thường cần thiết cho MySQL 8+
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/hyperBuy?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=root # Tên người dùng MySQL
+      - SPRING_DATASOURCE_PASSWORD=root # Mật khẩu MySQL, phải khớp với MYSQL_ROOT_PASSWORD của service 'db'
+      # Cấu hình khóa bí mật JWT, lấy từ application.properties của bạn
+      # TRONG MÔI TRƯỜNG PRODUCTION, BẠN NÊN QUẢN LÝ KEY NÀY AN TOÀN HƠN (ví dụ: Docker secrets, biến môi trường khi deploy)
+      - JWT_SIGNER_KEY=!TJXchW5FLOeSBb63Kck+DFHTaRpWL4JUGcWFgWxUG5S1F/ly/LgJxHnMQaF46A/i
+      # (Tùy chọn) Kích hoạt một Spring profile cụ thể, ví dụ 'docker' hoặc 'prod'
+      # - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      db: # Khai báo rằng userservice phụ thuộc vào service 'db'
+        condition: service_healthy # Chỉ khởi động userservice khi service 'db' ở trạng thái 'healthy' (dựa vào healthcheck)
+    networks:
+      # Kết nối service này vào mạng 'my-network'
+      - my-network
+
+  # Định nghĩa service cho cơ sở dữ liệu MySQL
+  db:
+    image: mysql:8.0 # Sử dụng image MySQL phiên bản 8.0 (bạn có thể chọn phiên bản khác)
+    container_name: mysql-db # Đặt tên cho container (tùy chọn)
+    ports:
+      # (Tùy chọn) Ánh xạ cổng 3306 của MySQL ra máy host để có thể kết nối từ bên ngoài (ví dụ: bằng MySQL Workbench)
+      - "3307:3306" # Sử dụng cổng 3307 trên host để tránh xung đột nếu bạn có MySQL chạy sẵn trên cổng 3306
+    environment:
+      # Cấu hình cho MySQL
+      - MYSQL_ROOT_PASSWORD=root # Mật khẩu cho người dùng root của MySQL
+      - MYSQL_DATABASE=hyperBuy # Tên database sẽ được tạo tự động khi container khởi động
+    volumes:
+      # Gắn một named volume để lưu trữ dữ liệu MySQL, giúp dữ liệu không bị mất khi container bị xóa/tạo lại
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      # Kiểm tra "sức khỏe" của MySQL server
+      # Lệnh này sẽ ping MySQL server để xem nó đã sẵn sàng nhận kết nối chưa
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-P", "3306", "-u" , "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s # Thời gian giữa các lần kiểm tra
+      timeout: 5s # Thời gian chờ tối đa cho một lần kiểm tra
+      retries: 5 # Số lần thử lại nếu kiểm tra thất bại
+      start_period: 30s # Thời gian chờ ban đầu trước khi bắt đầu kiểm tra (cho MySQL có thời gian khởi động)
+    networks:
+      # Kết nối service này vào mạng 'my-network'
+      - my-network
+
+# Định nghĩa các named volumes được sử dụng bởi các services
+volumes:
+  mysql_data: # Volume để lưu trữ dữ liệu của MySQL
+
+# Định nghĩa các custom networks
+networks:
+  my-network: # Mạng tùy chỉnh để các container có thể giao tiếp với nhau qua tên service
+    driver: bridge # Sử dụng driver mặc định 'bridge'
